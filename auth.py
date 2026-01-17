@@ -250,8 +250,9 @@ def login(authenticator):
             try:
                 # The login method now returns (name, authentication_status, username)
                 name, authentication_status, username = authenticator.login(
-                    'Login',  # Form name
-                    'main'    # Location
+                    form_name='Login',
+                    location='main',
+                    clear_on_submit=True
                 )
                 
                 # Handle authentication status

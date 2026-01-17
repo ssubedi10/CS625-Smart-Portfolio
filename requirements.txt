@@ -10,7 +10,7 @@ python-dateutil>=2.8.2
 python-dotenv>=1.0.0
 bcrypt>=4.0.1
 PyJWT>=2.8.0
-streamlit-authenticator>=0.2.2
+streamlit-authenticator>=0.2.2,<0.3.0  # Pinned to 0.2.x for compatibility
 
 # Streamlit and UI
 streamlit>=1.28.0
