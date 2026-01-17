@@ -46,7 +46,7 @@ def register_user(username: str, name: str, password: str):
     if username in config['credentials']['usernames']:
         raise ValueError('Username already exists')
     
-    # Hash the password using streamlit-authenticator 0.4.2 API
+    # Hash the password using streamlit-authenticator 0.2.2 API
     hashed_password = stauth.Hasher([password]).generate()[0]
     
     # Add the new user
@@ -60,20 +60,6 @@ def register_user(username: str, name: str, password: str):
     return True
 
 def get_authenticator():
-    """Get an instance of the authenticator."""
-    config = load_config()
-    
-    authenticator = stauth.Authenticate(
-        config['credentials'],
-        config['cookie']['name'],
-        config['cookie']['key'],
-        config['cookie']['expiry_days'],
-        config['preauthorized']
-    )
-    
-    return authenticator
-
-def get_authenticator():
     """Initialize and return the authenticator with default test user if no users exist."""
     config_file = Path(__file__).parent / ".streamlit" / "users.yaml"
     config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -81,18 +67,30 @@ def get_authenticator():
     # Default config with test user
     default_config = {
         'credentials': {
-            'usernames': {
-                'testuser': {
-                    'email': 'test@example.com',
-                    'name': 'Test User',
-                    'password': stauth.Hasher(['test123']).generate()[0]
-                }
-            }
+            'usernames': {}
+        },
+        'cookie': {
+            'expiry_days': 30,
+            'key': 'some_signature_key',
+            'name': 'spars_auth_cookie'
+        },
+        'preauthorized': {
+            'emails': []
         }
     }
     
     # Create config file with default user if it doesn't exist
     if not config_file.exists():
+        # Add a default test user with hashed password
+        hashed_password = stauth.Hasher(['test123']).generate()[0]
+        default_config['credentials']['usernames'] = {
+            'testuser': {
+                'email': 'test@example.com',
+                'name': 'Test User',
+                'password': hashed_password
+            }
+        }
+        
         with open(config_file, 'w') as file:
             yaml.dump(default_config, file, default_flow_style=False)
     
@@ -100,16 +98,38 @@ def get_authenticator():
     with open(config_file) as file:
         config = yaml.load(file, Loader=SafeLoader) or default_config
     
-    # Ensure the config has the expected structure
+    # Ensure the config has all required sections and structure
     if 'credentials' not in config or 'usernames' not in config['credentials']:
-        config = default_config
+        config['credentials'] = default_config['credentials']
+    if 'cookie' not in config:
+        config['cookie'] = default_config['cookie']
+    if 'preauthorized' not in config:
+        config['preauthorized'] = default_config['preauthorized']
     
-    return stauth.Authenticate(
+    # Check if we have any users, if not add the default test user
+    if not config['credentials'].get('usernames'):
+        hashed_password = stauth.Hasher(['test123']).generate()[0]
+        config['credentials']['usernames'] = {
+            'testuser': {
+                'email': 'test@example.com',
+                'name': 'Test User',
+                'password': hashed_password
+            }
+        }
+        # Save the updated config
+        with open(config_file, 'w') as file:
+            yaml.dump(config, file, default_flow_style=False)
+    
+    # Create authenticator
+    authenticator = stauth.Authenticate(
         config['credentials'],
-        'auth_cookie_name',
-        'auth_signature_key',
-        cookie_expiry_days=30
+        config['cookie']['name'],
+        config['cookie']['key'],
+        config['cookie'].get('expiry_days', 30),
+        config['preauthorized']
     )
+    
+    return authenticator
 
 def register_user(username, name, password):
     """Register a new user."""
