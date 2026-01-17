@@ -248,11 +248,11 @@ def login(authenticator):
             
             # Display login form using the authenticator
             try:
-                # The login method now returns (name, authentication_status, username)
+                # The login method returns (name, authentication_status, username)
+                # For streamlit-authenticator 0.2.2, we use positional arguments
                 name, authentication_status, username = authenticator.login(
-                    form_name='Login',
-                    location='main',
-                    clear_on_submit=True
+                    'Login',  # form_name
+                    'main'    # location
                 )
                 
                 # Handle authentication status
@@ -266,7 +266,7 @@ def login(authenticator):
                         <p>👤 Username: <code>testuser</code></p>
                         <p>🔑 Password: <code>test123</code></p>
                     </div>
-                    """, unsafe_html=True)
+                    """, unsafe_allow_html=True)
                 else:
                     # Store the authentication status in session state
                     st.session_state["authentication_status"] = authentication_status
