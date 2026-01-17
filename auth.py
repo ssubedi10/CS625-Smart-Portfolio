@@ -246,23 +246,36 @@ def login(authenticator):
         with tab1:
             st.header("Login to Your Account")
             
-            # Display login form using the authenticator
-            name, authentication_status, username = authenticator.login('Login', 'main')
-            
-            # Handle authentication status
-            if authentication_status is False:
-                st.error("❌ Invalid username or password")
-            elif authentication_status is None:
-                # Show default credentials hint
-                st.markdown("""
-                <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0;">
-                    <p>Try these default credentials:</p>
-                    <p>👤 Username: <code>testuser</code></p>
-                    <p>🔑 Password: <code>test123</code></p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                return True, username
+            # Display login form using the authenticator with the new API
+            try:
+                login_form = authenticator.login(
+                    location='main',
+                    fields={
+                        'form_name': 'Login',
+                        'username': '👤 Username',
+                        'password': '🔑 Password',
+                        'submit': 'Login'
+                    }
+                )
+                
+                # Handle authentication status
+                if login_form['authentication_status'] is False:
+                    st.error("❌ Invalid username or password")
+                elif login_form['authentication_status'] is None:
+                    # Show default credentials hint
+                    st.markdown("""
+                    <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0;">
+                        <p>Try these default credentials:</p>
+                        <p>👤 Username: <code>testuser</code></p>
+                        <p>🔑 Password: <code>test123</code></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    return True, login_form['username']
+                    
+            except Exception as e:
+                st.error(f"An error occurred during login: {str(e)}")
+                st.stop()
 
         with tab2:
             st.header("Create a New Account")
