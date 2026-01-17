@@ -125,8 +125,7 @@ def get_authenticator():
         config['credentials'],
         config['cookie']['name'],
         config['cookie']['key'],
-        config['cookie'].get('expiry_days', 30),
-        config['preauthorized']
+        config['cookie'].get('expiry_days', 30)
     )
     
     return authenticator
