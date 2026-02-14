@@ -132,7 +132,13 @@ class PortfolioOverview:
         allocation = {}
         for asset in self.portfolio.assets:
             weight = self.portfolio.weights.get(asset.ticker, 0)
-            asset_value = asset.current_value * (getattr(asset, 'quantity', 1) or 1)
+            try:
+                asset_value = asset.current_value()
+            except (ValueError, AttributeError):
+                # Fallback to manual calculation if current_value() fails
+                quantity = getattr(asset, 'quantity', 1) or 1
+                latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                asset_value = latest_price * quantity
             allocation[asset.ticker] = {
                 'weight': weight * 100,  # as percentage
                 'value': asset_value,
@@ -149,7 +155,13 @@ class PortfolioOverview:
         for asset in self.portfolio.assets:
             if hasattr(asset, 'sector') and asset.sector:
                 sector = asset.sector
-                value = asset.current_value * (getattr(asset, 'quantity', 1) or 1)
+                try:
+                    value = asset.current_value()
+                except (ValueError, AttributeError):
+                    # Fallback to manual calculation if current_value() fails
+                    quantity = getattr(asset, 'quantity', 1) or 1
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    value = latest_price * quantity
                 sector_allocation[sector] = sector_allocation.get(sector, 0) + value
         
         total_value = self.portfolio.calculate_total_value()
@@ -163,13 +175,21 @@ class PortfolioOverview:
         for asset in self.portfolio.assets:
             if hasattr(asset, 'purchase_price') and asset.purchase_price > 0:
                 pct_return = ((asset.current_price / asset.purchase_price) - 1) * 100
+                try:
+                    value = asset.current_value()
+                except (ValueError, AttributeError):
+                    # Fallback to manual calculation if current_value() fails
+                    quantity = getattr(asset, 'quantity', 1) or 1
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    value = latest_price * quantity
+                
                 assets.append({
                     'ticker': asset.ticker,
                     'name': getattr(asset, 'name', ''),
                     'sector': getattr(asset, 'sector', 'N/A'),
                     'asset_type': asset.asset_type,
                     'pct_return': pct_return,
-                    'value': asset.current_value * (getattr(asset, 'quantity', 1) or 1)
+                    'value': value
                 })
         
         # Sort by return (descending)
@@ -672,7 +692,13 @@ class PortfolioOverview:
         
         for asset in self.portfolio.assets:
             if asset.ticker in target_weights:
-                current_values[asset.ticker] = asset.current_value * getattr(asset, 'quantity', 1)
+                try:
+                    current_values[asset.ticker] = asset.current_value()
+                except (ValueError, AttributeError):
+                    # Fallback to manual calculation if current_value() fails
+                    quantity = getattr(asset, 'quantity', 1)
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    current_values[asset.ticker] = latest_price * quantity
                 current_weights[asset.ticker] = current_values[asset.ticker] / total_value
         
         # Calculate target values and differences

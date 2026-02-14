@@ -341,6 +341,16 @@ class Portfolio:
                 ticker = asset.ticker
                 quantity = getattr(asset, 'quantity', 0)
                 
+                # Try to get current value from the asset first
+                try:
+                    if hasattr(asset, 'current_value') and callable(getattr(asset, 'current_value')):
+                        asset_value = asset.current_value()
+                        total += asset_value
+                        continue
+                except (ValueError, AttributeError):
+                    # Fall back to manual calculation if current_value() fails
+                    pass
+                
                 # Get the latest price from cache
                 latest_price = None
                 if ticker in self._price_cache and self._price_cache[ticker]:
@@ -349,9 +359,11 @@ class Portfolio:
                 # If no cached price, use current_price as fallback
                 if latest_price is None and hasattr(asset, 'current_price'):
                     latest_price = getattr(asset, 'current_price', 0)
+                    if latest_price is None:
+                        latest_price = 0
                 
                 # Final fallback to purchase price if no other price is available
-                if latest_price is None:
+                if latest_price is None or latest_price == 0:
                     latest_price = getattr(asset, 'purchase_price', 0)
                 
                 total += latest_price * quantity
@@ -443,7 +455,8 @@ class Portfolio:
         return asset_details
     
     def get_asset_allocation(self) -> Dict[str, float]:
-        """Get the allocation of each asset as a percentage of the total portfolio.
+        """
+        Calculate the allocation percentage of each asset in the portfolio.
         
         Returns:
             Dict[str, float]: Dictionary mapping asset tickers to their allocation percentages
@@ -455,9 +468,22 @@ class Portfolio:
         asset_allocation = {}
         for asset in self.assets:
             # Only include assets with positive value
-            asset_value = asset.current_value()  # Call as method
-            if asset_value > 0:
-                asset_allocation[asset.ticker] = (asset_value / total_value) * 100
+            try:
+                # Try to get current value from the asset first
+                if hasattr(asset, 'current_value') and callable(getattr(asset, 'current_value')):
+                    asset_value = asset.current_value()
+                else:
+                    # Fall back to manual calculation
+                    ticker = asset.ticker
+                    quantity = getattr(asset, 'quantity', 0)
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    asset_value = latest_price * quantity
+                
+                if asset_value > 0:
+                    asset_allocation[asset.ticker] = (asset_value / total_value) * 100
+            except (ValueError, AttributeError):
+                # Skip assets that can't be valued
+                continue
                 
         return asset_allocation
     

@@ -464,3 +464,121 @@ class DataManager:
         except Exception as e:
             print(f"Error fetching 10-year Treasury yield: {str(e)}")
             return 0.04  # Fallback to 4%
+    
+    def clean_old_cache(self, days_to_keep: int = 30) -> int:
+        """
+        Delete cached data files older than the specified number of days.
+        
+        Args:
+            days_to_keep: Number of days to keep cache files (default: 30)
+            
+        Returns:
+            Number of files deleted
+        """
+        if not os.path.exists(self.cache_dir):
+            return 0
+            
+        files_deleted = 0
+        cutoff_time = time.time() - (days_to_keep * 24 * 60 * 60)  # Convert days to seconds
+        
+        try:
+            for filename in os.listdir(self.cache_dir):
+                file_path = os.path.join(self.cache_dir, filename)
+                
+                # Only process files (not directories)
+                if os.path.isfile(file_path):
+                    file_time = os.path.getmtime(file_path)
+                    
+                    # Delete if file is older than cutoff time
+                    if file_time < cutoff_time:
+                        try:
+                            os.remove(file_path)
+                            files_deleted += 1
+                            print(f"Deleted old cache file: {filename}")
+                        except Exception as e:
+                            print(f"Error deleting cache file {filename}: {str(e)}")
+                            
+        except Exception as e:
+            print(f"Error cleaning cache directory: {str(e)}")
+            
+        if files_deleted > 0:
+            print(f"Cache cleanup completed. Deleted {files_deleted} old files.")
+        else:
+            print("No old cache files to delete.")
+            
+        return files_deleted
+    
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        Get information about cached data.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        if not os.path.exists(self.cache_dir):
+            return {
+                'total_files': 0,
+                'total_size_mb': 0,
+                'oldest_file': None,
+                'newest_file': None,
+                'files_by_age': {}
+            }
+            
+        files = []
+        total_size = 0
+        
+        try:
+            for filename in os.listdir(self.cache_dir):
+                file_path = os.path.join(self.cache_dir, filename)
+                if os.path.isfile(file_path):
+                    file_time = os.path.getmtime(file_path)
+                    file_size = os.path.getsize(file_path)
+                    files.append({
+                        'name': filename,
+                        'mtime': file_time,
+                        'size': file_size
+                    })
+                    total_size += file_size
+        except Exception as e:
+            print(f"Error scanning cache directory: {str(e)}")
+            return {'error': str(e)}
+        
+        if not files:
+            return {
+                'total_files': 0,
+                'total_size_mb': 0,
+                'oldest_file': None,
+                'newest_file': None,
+                'files_by_age': {}
+            }
+        
+        # Sort files by modification time
+        files.sort(key=lambda x: x['mtime'])
+        
+        # Calculate age distribution
+        now = time.time()
+        age_groups = {
+            'less_than_1_day': 0,
+            '1_to_7_days': 0,
+            '7_to_30_days': 0,
+            'older_than_30_days': 0
+        }
+        
+        for file in files:
+            age_days = (now - file['mtime']) / (24 * 60 * 60)
+            if age_days < 1:
+                age_groups['less_than_1_day'] += 1
+            elif age_days < 7:
+                age_groups['1_to_7_days'] += 1
+            elif age_days < 30:
+                age_groups['7_to_30_days'] += 1
+            else:
+                age_groups['older_than_30_days'] += 1
+        
+        return {
+            'total_files': len(files),
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'oldest_file': datetime.fromtimestamp(files[0]['mtime']).strftime('%Y-%m-%d %H:%M:%S'),
+            'newest_file': datetime.fromtimestamp(files[-1]['mtime']).strftime('%Y-%m-%d %H:%M:%S'),
+            'files_by_age': age_groups
+        }

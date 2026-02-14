@@ -492,6 +492,19 @@ if 'portfolio' not in st.session_state:
 # Initialize data manager if not already set
 if 'data_manager' not in st.session_state:
     st.session_state.data_manager = DATA_MANAGER
+
+# Automatic cache cleanup (optional - uncomment to enable)
+# Clean cache files older than 90 days on startup
+try:
+    cache_info = st.session_state.data_manager.get_cache_info()
+    if cache_info.get('total_files', 0) > 200:  # Only clean if there are many files
+        old_files = cache_info.get('files_by_age', {}).get('older_than_30_days', 0)
+        if old_files > 50:  # Only clean if there are many old files
+            files_deleted = st.session_state.data_manager.clean_old_cache(days_to_keep=30)
+            if files_deleted > 0:
+                print(f"Auto-cleaned {files_deleted} old cache files on startup")
+except Exception as e:
+    print(f"Error during automatic cache cleanup: {str(e)}")
 st.sidebar.markdown("""
     <div style='margin: 0 0 3rem 0; padding: 0 0 2.5rem 0; border-bottom: 2px solid #e9ecef;'>
         <h2 style='color: #2c3e50; margin: 0 0 1.25rem 0; font-size: 3rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.03em;'>Portfolio Manager</h2>
@@ -942,6 +955,54 @@ with st.sidebar.expander("\u2795 Add Assets", expanded=True):
 
 # Add a separator after the Add Assets section
 st.sidebar.markdown("<div style='margin: 20px 0;'><hr style='border: 0.5px solid #e0e0e0;'></div>", unsafe_allow_html=True)
+
+# Cache Management Section
+with st.sidebar.expander("Cache Management", expanded=False):
+    st.markdown("**Manage cached market data**")
+    
+    # Show cache info
+    cache_info = st.session_state.data_manager.get_cache_info()
+    
+    if 'error' in cache_info:
+        st.error(f"Error reading cache info: {cache_info['error']}")
+    else:
+        st.write(f"**Total files:** {cache_info['total_files']}")
+        st.write(f"**Total size:** {cache_info['total_size_mb']} MB")
+        
+        if cache_info['oldest_file']:
+            st.write(f"**Oldest file:** {cache_info['oldest_file']}")
+        if cache_info['newest_file']:
+            st.write(f"**Newest file:** {cache_info['newest_file']}")
+        
+        # Show age distribution
+        age_dist = cache_info['files_by_age']
+        if age_dist.get('older_than_30_days', 0) > 0:
+            st.warning(f"Warning: {age_dist['older_than_30_days']} files are older than 30 days")
+        
+        # Cache cleanup options
+        st.markdown("**Clean up old cache files:**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            days_to_keep = st.number_input("Keep files (days)", min_value=1, max_value=365, value=30, step=1)
+        with col2:
+            st.write("")  # Spacer
+            if st.button("Clean Cache", type="secondary"):
+                with st.spinner("Cleaning cache..."):
+                    files_deleted = st.session_state.data_manager.clean_old_cache(days_to_keep)
+                    if files_deleted > 0:
+                        st.success(f"Deleted {files_deleted} old cache files!")
+                        st.rerun()
+                    else:
+                        st.info("No old cache files to delete.")
+        
+        # Show detailed breakdown
+        if st.checkbox("Show detailed breakdown"):
+            st.markdown("**Files by age:**")
+            st.write(f"• Less than 1 day: {age_dist.get('less_than_1_day', 0)}")
+            st.write(f"• 1-7 days: {age_dist.get('1_to_7_days', 0)}")
+            st.write(f"• 7-30 days: {age_dist.get('7_to_30_days', 0)}")
+            st.write(f"• Older than 30 days: {age_dist.get('older_than_30_days', 0)}")
 
 # Main app with enhanced header
 st.markdown("""
@@ -1511,36 +1572,21 @@ with tab1:
     except Exception as e:
         st.error(f"Error updating prices: {str(e)}")
     
-    # Calculate total portfolio value using Polygon API for current prices
-    total_value = 0.0
-    asset_values = {}
-    
-    # Initialize DataManager with Polygon API key
+    # Calculate total portfolio value using the latest market data
     try:
-        from smart_portfolio_analyzer.data_manager import DataManager
-        import os
-        from dotenv import load_dotenv
-        
-        load_dotenv()
-        POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
-        
-        if not POLYGON_API_KEY:
-            st.error("POLYGON_API_KEY not found in environment variables")
-            # Continue with the rest of the code but show error
-            data_manager = None
-        else:
-            data_manager = DataManager(api_key=POLYGON_API_KEY)
-        
-        # Get current date for the end date
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')  # Get last 5 days of data
+        # Use the session's DataManager to get latest prices
+        data_manager = st.session_state.data_manager
         
         # Get all tickers from the portfolio
         tickers = [asset.ticker for asset in st.session_state.portfolio.assets 
                   if hasattr(asset, 'ticker') and hasattr(asset, 'quantity')]
         
         if tickers:
-            # Fetch the latest prices using Polygon API
+            # Get current date for the end date
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')  # Get last 5 days of data
+            
+            # Fetch the latest prices using DataManager
             hist_data = data_manager.get_historical_prices(
                 tickers,
                 start_date=start_date,
@@ -1550,33 +1596,47 @@ with tab1:
                 source='polygon'
             )
             
-            # Calculate total value and asset values
+            # Update each asset with the latest price and calculate values
+            asset_values = {}
+            total_value = 0.0
+            
             for asset in st.session_state.portfolio.assets:
                 if hasattr(asset, 'ticker') and hasattr(asset, 'quantity'):
                     ticker = asset.ticker
                     quantity = getattr(asset, 'quantity', 0)
-                    asset_value = 0.0
                     
                     # Get the latest price from the historical data
                     if ticker in hist_data and not hist_data[ticker].empty:
                         latest_price = hist_data[ticker]['close'].iloc[-1]
+                        # Update the asset's current price using the proper method
+                        old_price = getattr(asset, 'current_price', 0)
+                        asset.update_price(latest_price, date.today())
                         asset_value = latest_price * quantity
-                        # Update the asset's current price
-                        if hasattr(asset, 'current_price'):
-                            asset.current_price = latest_price
+                        
+                        # Debug info
+                        if old_price != latest_price:
+                            st.sidebar.write(f"📈 Updated {ticker}: ${old_price:.2f} → ${latest_price:.2f}")
                     else:
-                        # Fallback to current_price if available
+                        # Fallback to current_price if available, then purchase price
                         latest_price = getattr(asset, 'current_price', 0)
-                        if latest_price is None:
+                        if latest_price is None or latest_price == 0:
                             latest_price = getattr(asset, 'purchase_price', 0)
                         asset_value = latest_price * quantity
+                        
+                        # Debug info
+                        st.sidebar.write(f"⚠️ Using fallback price for {ticker}: ${latest_price:.2f}")
                     
                     asset_values[ticker] = asset_value
                     total_value += asset_value
-    
+        else:
+            total_value = 0.0
+            asset_values = {}
+            
     except Exception as e:
-        st.error(f"Error fetching data from Polygon API: {str(e)}")
-        # Fallback to the original method if there's an error
+        st.error(f"Error fetching latest market data: {str(e)}")
+        # Fallback calculation using existing prices
+        total_value = 0.0
+        asset_values = {}
         for asset in st.session_state.portfolio.assets:
             if hasattr(asset, 'ticker') and hasattr(asset, 'quantity'):
                 ticker = asset.ticker
@@ -1597,13 +1657,13 @@ with tab1:
     pl_percent = (total_pl / total_purchase_value * 100) if total_purchase_value > 0 else 0
     
     # Display metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         # Show the latest portfolio value with a tooltip
         st.metric(
             "Total Portfolio Value", 
             f"${total_value:,.2f}",
-            help="Latest value from today's time series data"
+            help="Latest value from today's market data"
         )
     with col2:
         st.metric("Number of Assets", len(st.session_state.portfolio.assets))
@@ -1611,10 +1671,17 @@ with tab1:
         st.metric(
             "Total P&L", 
             f"${total_pl:,.2f}",
-            f"{pl_percent:+.2f}%"
+            delta=f"{pl_percent:.2f}%" if pl_percent != 0 else None
         )
     with col4:
-        st.metric("Total Invested", f"${total_purchase_value:,.2f}")
+        st.metric(
+            "Total Invested", 
+            f"${total_purchase_value:,.2f}",
+            help="Original investment amount"
+        )
+    with col5:
+        if st.button("🔄 Refresh Prices", help="Fetch latest market prices"):
+            st.rerun()
         
     # The portfolio value over time chart is now handled in its own section
     # and uses the same data source as the total value shown above

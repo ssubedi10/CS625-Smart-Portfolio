@@ -314,7 +314,13 @@ class Analytics:
         asset_allocation = {}
         for asset in self.portfolio.assets:
             weight = self.portfolio.weights.get(asset.ticker, 0)
-            asset_value = asset.current_value * (asset.quantity if hasattr(asset, 'quantity') else 1)
+            try:
+                asset_value = asset.current_value()
+            except (ValueError, AttributeError):
+                # Fallback to manual calculation if current_value() fails
+                quantity = asset.quantity if hasattr(asset, 'quantity') else 1
+                latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                asset_value = latest_price * quantity
             asset_allocation[asset.ticker] = {
                 'weight': weight,
                 'value': asset_value,
@@ -328,7 +334,13 @@ class Analytics:
         for asset in self.portfolio.assets:
             if hasattr(asset, 'sector'):
                 sector = asset.sector or 'Other'
-                value = asset.current_value * (asset.quantity if hasattr(asset, 'quantity') else 1)
+            try:
+                value = asset.current_value()
+            except (ValueError, AttributeError):
+                # Fallback to manual calculation if current_value() fails
+                quantity = asset.quantity if hasattr(asset, 'quantity') else 1
+                latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                value = latest_price * quantity
                 if sector in sector_allocation:
                     sector_allocation[sector] += value
                 else:
@@ -381,11 +393,19 @@ class Analytics:
         for asset in self.portfolio.assets:
             if hasattr(asset, 'purchase_price') and asset.purchase_price > 0:
                 pct_return = ((asset.current_price / asset.purchase_price) - 1) * 100
+                try:
+                    value = asset.current_value()
+                except (ValueError, AttributeError):
+                    # Fallback to manual calculation if current_value() fails
+                    quantity = asset.quantity if hasattr(asset, 'quantity') else 1
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    value = latest_price * quantity
+                
                 performers.append({
                     'ticker': asset.ticker,
                     'name': getattr(asset, 'name', ''),
                     'pct_return': pct_return,
-                    'value': asset.current_value * (asset.quantity if hasattr(asset, 'quantity') else 1)
+                    'value': value
                 })
         
         return sorted(performers, key=lambda x: x['pct_return'], reverse=True)[:n]
@@ -396,11 +416,19 @@ class Analytics:
         for asset in self.portfolio.assets:
             if hasattr(asset, 'purchase_price') and asset.purchase_price > 0:
                 pct_return = ((asset.current_price / asset.purchase_price) - 1) * 100
+                try:
+                    value = asset.current_value()
+                except (ValueError, AttributeError):
+                    # Fallback to manual calculation if current_value() fails
+                    quantity = asset.quantity if hasattr(asset, 'quantity') else 1
+                    latest_price = getattr(asset, 'current_price', 0) or getattr(asset, 'purchase_price', 0)
+                    value = latest_price * quantity
+                
                 performers.append({
                     'ticker': asset.ticker,
                     'name': getattr(asset, 'name', ''),
                     'pct_return': pct_return,
-                    'value': asset.current_value * (asset.quantity if hasattr(asset, 'quantity') else 1)
+                    'value': value
                 })
         
         return sorted(performers, key=lambda x: x['pct_return'])[:n]
