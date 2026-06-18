@@ -21,15 +21,14 @@ class DataManager:
     def __init__(self, api_key: str = None, cache_dir: str = 'data_cache'):
         """
         Initialize the DataManager.
-        
+
         Args:
             api_key: Polygon.io API key (required for Polygon data)
             cache_dir: Directory to store cached data
         """
-        if not api_key:
+        self.api_key = api_key or os.environ.get('POLYGON_API_KEY', '')
+        if not self.api_key:
             raise ValueError("Polygon.io API key is required. Get one at https://polygon.io/")
-            
-        self.api_key = api_key
         self.cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), cache_dir)
         os.makedirs(self.cache_dir, exist_ok=True)
         self.polygon_client = RESTClient(api_key=api_key)

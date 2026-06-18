@@ -1,3 +1,9 @@
+# Load environment variables before anything else
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
+
 # Set page config must be the very first Streamlit command
 import streamlit as st
 
@@ -170,29 +176,15 @@ from smart_portfolio_analyzer import (
     PortfolioAnalyzer
 )
 
-# Initialize DataManager with environment variables
+# Initialize DataManager — key comes from .env (loaded at top of file)
+# st.secrets is checked first so production deployments on Streamlit Cloud still work
 try:
-    # Try to get API key from Streamlit secrets first (for production)
-    if 'POLYGON_API_KEY' in st.secrets:
-        DATA_MANAGER = DataManager(api_key=st.secrets['POLYGON_API_KEY'])
-    # Fallback to .env file for local development
-    else:
-        from dotenv import load_dotenv
-        import os
-        
-        # Load environment variables from .env file
-        load_dotenv()
-        
-        # Get API key from environment variables
-        polygon_api_key = os.getenv('POLYGON_API_KEY')
-        if not polygon_api_key:
-            raise ValueError("POLYGON_API_KEY not found in environment variables")
-            
-        DATA_MANAGER = DataManager(api_key=polygon_api_key)
-        
+    _api_key = st.secrets.get('POLYGON_API_KEY') or os.environ.get('POLYGON_API_KEY', '')
+    DATA_MANAGER = DataManager(api_key=_api_key)
 except Exception as e:
     st.error(f"Error initializing DataManager: {str(e)}")
-    st.error("Please ensure you have a valid Polygon.io API key in Streamlit secrets or .env file")
+    st.error("Please ensure POLYGON_API_KEY is set in your .env file")
+    st.stop()
     st.stop()
 
 # Add logo to sidebar with better styling

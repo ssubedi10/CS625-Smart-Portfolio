@@ -40,6 +40,12 @@ ENV/
 config.py
 secrets.py
 
+# Streamlit secrets (real keys go in .env, not here)
+.streamlit/secrets.toml
+
+# Cache files
+data_cache/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
